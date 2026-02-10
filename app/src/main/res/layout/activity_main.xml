@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="IRIS 機器人導覽設定"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="20dp"/>
+
+    <EditText
+        android:id="@+id/et_ip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="機器人 IP (例如 192.168.1.10)"
+        android:inputType="text" />
+
+    <EditText
+        android:id="@+id/et_port"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Port (預設 8080)"
+        android:inputType="number" />
+
+    <Button
+        android:id="@+id/btn_connect"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="連接機器人"
+        android:layout_marginTop="10dp"/>
+
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="狀態: 未連線"
+        android:layout_marginTop="20dp"
+        android:textColor="#FF0000"/>
+
+</LinearLayout>
