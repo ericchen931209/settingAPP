@@ -39,9 +39,32 @@ class MainActivity : AppCompatActivity() {
                 // 更新 UI 必須在主執行緒
                 runOnUiThread {
                     tvStatus.text = "狀態: $statusMessage"
+                    // 判斷是否連線成功
+                    if (statusMessage == "連線成功") {
+                        showMapCheckDialog() // 觸發跳轉詢問
+                    }
                 }
             }
         }
+    }
+    private fun showMapCheckDialog() {
+        val builder = android.app.AlertDialog.Builder(this)
+        builder.setTitle("地圖確認")
+        builder.setMessage("請問您是否有現有的地圖檔？")
+
+        builder.setPositiveButton("有，匯入地圖") { _, _ ->
+            // 處理匯入邏輯
+            android.widget.Toast.makeText(this, "請選擇地圖檔案...", android.widget.Toast.LENGTH_SHORT).show()
+        }
+
+        builder.setNegativeButton("沒有，前往建圖") { _, _ ->
+            // 跳轉到 MappingActivity
+            val intent = android.content.Intent(this, MappingActivity::class.java)
+            startActivity(intent)
+        }
+
+        builder.setCancelable(false)
+        builder.show()
     }
 
     override fun onDestroy() {

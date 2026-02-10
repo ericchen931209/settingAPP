@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <ImageView
+        android:id="@+id/map_view"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scaleType="centerInside"
+        android:src="@android:drawable/ic_menu_report_image"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <Button
+            android:id="@+id/btn_rebuild"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="重新建圖"
+            android:backgroundTint="#FF9800"
+            android:layout_marginEnd="8dp"/>
+
+        <Button
+            android:id="@+id/btn_save_map"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="儲存"
+            android:backgroundTint="#4CAF50"/>
+    </LinearLayout>
+
+    <GridLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:columnCount="3"
+        android:rowCount="3"
+        android:layout_margin="24dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <View android:layout_width="50dp" android:layout_height="50dp" />
+        <Button
+            android:id="@+id/btn_up"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:text="↑" />
+        <View android:layout_width="50dp" android:layout_height="50dp" />
+
+        <Button
+            android:id="@+id/btn_left"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:text="←" />
+        <Button
+            android:id="@+id/btn_down"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:text="↓" />
+        <Button
+            android:id="@+id/btn_right"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:text="→" />
+    </GridLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
