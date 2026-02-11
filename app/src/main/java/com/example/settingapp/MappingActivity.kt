@@ -1,43 +1,28 @@
-package com.example.settingapp
+// ... 其他 import 保持不變
 
-import android.os.Bundle
-import android.widget.Button
-import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    setContentView(R.layout.activity_mapping)
 
-class MappingActivity : AppCompatActivity() {
+    // 綁定元件代碼... (略)
 
-    // 這裡我們需要使用同一個 TCP Manager 實例或重新連線
-    // 為了簡化，我們先宣告一個新的，實際專案建議使用 Singleton 模式
-    private val tcpManager = RobotTcpManager()
+    // 使用符合 AMR 協議的 JSON 指令
+    btnUp.setOnClickListener    { tcpManager.sendCommand("ManualControl", "F") } // 前進
+    btnDown.setOnClickListener  { tcpManager.sendCommand("ManualControl", "B") } // 後退
+    btnLeft.setOnClickListener  { tcpManager.sendCommand("ManualControl", "L") } // 左轉
+    btnRight.setOnClickListener { tcpManager.sendCommand("ManualControl", "R") } // 右轉
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_mapping)
+    // 停止按鈕 (建議增加一個停止鈕，或在放開按鈕時傳送 S)
+    // btnStop.setOnClickListener { tcpManager.sendCommand("ManualControl", "S") }
 
-        // 綁定 UI 按鈕
-        val btnUp = findViewById<Button>(R.id.btn_up)
-        val btnDown = findViewById<Button>(R.id.btn_down)
-        val btnLeft = findViewById<Button>(R.id.btn_left)
-        val btnRight = findViewById<Button>(R.id.btn_right)
-        val btnSave = findViewById<Button>(R.id.btn_save_map)
-        val btnRebuild = findViewById<Button>(R.id.btn_rebuild)
+    // 儲存地圖：根據文件應使用 SetMap 指令
+    btnSave.setOnClickListener {
+        tcpManager.sendCommand("SetMap", "save")
+        Toast.makeText(this, "發送儲存指令", Toast.LENGTH_SHORT).show()
+    }
 
-        // 設定方向鍵指令
-        btnUp.setOnClickListener { tcpManager.send("MOVE_FORWARD") }
-        btnDown.setOnClickListener { tcpManager.send("MOVE_BACKWARD") }
-        btnLeft.setOnClickListener { tcpManager.send("TURN_LEFT") }
-        btnRight.setOnClickListener { tcpManager.send("TURN_RIGHT") }
-
-        // 儲存與重新建圖
-        btnSave.setOnClickListener {
-            tcpManager.send("SAVE_MAP")
-            Toast.makeText(this, "地圖儲存指令已送出", Toast.LENGTH_SHORT).show()
-        }
-
-        btnRebuild.setOnClickListener {
-            tcpManager.send("CLEAR_AND_REBUILD")
-            Toast.makeText(this, "重新建圖中...", Toast.LENGTH_SHORT).show()
-        }
+    // 重新建圖：切換到 mapping 模式
+    btnRebuild.setOnClickListener {
+        tcpManager.sendCommand("SwitchMode", "mapping")
     }
 }
