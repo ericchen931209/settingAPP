@@ -1,74 +1,53 @@
 package com.example.settingapp
 
-// 這些 Import 是解決 Unresolved reference 的關鍵
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
-
-    // 建立通訊管理員 (確保 RobotTcpManager.kt 檔案已存在)
-    private val tcpManager = RobotTcpManager()
+    private val tcpManager = RobotTcpManager() // 初始化通訊工具
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 確保你的 R.layout 名稱與 activity_main.xml 一致
         setContentView(R.layout.activity_main)
 
-        // 綁定 UI 元件
+        // 綁定 XML 中的 UI 元件，以便在程式中操作
         val btnConnect = findViewById<Button>(R.id.btn_connect)
         val etIp = findViewById<EditText>(R.id.et_ip)
-        val etPort = findViewById<EditText>(R.id.et_port)
         val tvStatus = findViewById<TextView>(R.id.tv_status)
 
-        // 設定點擊邏輯
+        // 設定「連接機器人」按鈕的點擊行為
         btnConnect.setOnClickListener {
             val ip = etIp.text.toString()
-            val port = etPort.text.toString().toIntOrNull() ?: 8080
-
-            if (ip.isEmpty()) {
-                Toast.makeText(this, "請輸入機器人 IP", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            // 呼叫連線
-            tcpManager.connect(ip, port) { statusMessage ->
-                // 更新 UI 必須在主執行緒
+            // 呼叫連線邏輯
+            tcpManager.connect(ip) { status ->
+                // 更新畫面文字必須切換回 runOnUiThread (主執行緒)
                 runOnUiThread {
-                    tvStatus.text = "狀態: $statusMessage"
-                    // 判斷是否連線成功
-                    if (statusMessage == "連線成功") {
-                        showMapCheckDialog() // 觸發跳轉詢問
-                    }
+                    tvStatus.text = "狀態: $status"
+                    // 若關鍵字顯示成功，則跳出詢問對話框
+                    if (status.contains("成功")) showMapCheckDialog(ip)
                 }
             }
         }
     }
-    private fun showMapCheckDialog() {
-        val builder = android.app.AlertDialog.Builder(this)
-        builder.setTitle("地圖確認")
-        builder.setMessage("請問您是否有現有的地圖檔？")
 
-        builder.setPositiveButton("有，匯入地圖") { _, _ ->
-            // 處理匯入邏輯
-            android.widget.Toast.makeText(this, "請選擇地圖檔案...", android.widget.Toast.LENGTH_SHORT).show()
-        }
-
-        builder.setNegativeButton("沒有，前往建圖") { _, _ ->
-            // 跳轉到 MappingActivity
-            val intent = android.content.Intent(this, MappingActivity::class.java)
-            startActivity(intent)
-        }
-
-        builder.setCancelable(false)
-        builder.show()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        tcpManager.close() // 關閉 App 時斷開 TCP 連線
+    // 彈出對話框：詢問地圖狀態以進行功能分流
+    private fun showMapCheckDialog(ip: String) {
+        AlertDialog.Builder(this)
+            .setTitle("IRIS 連線成功")
+            .setMessage("您是否已有地圖檔案？")
+            .setPositiveButton("有，匯入地圖") { _, _ -> /* 預留匯入功能 */ }
+            .setNegativeButton("沒有，去建圖") { _, _ ->
+                // 使用 Intent 進行頁面跳轉，並將 IP 傳給下一個畫面
+                val intent = Intent(this, MappingActivity::class.java)
+                intent.putExtra("IP", ip)
+                startActivity(intent)
+            }
+            .setCancelable(false) // 防止點擊背景關閉對話框
+            .show()
     }
 }

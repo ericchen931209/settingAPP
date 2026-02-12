@@ -1,28 +1,52 @@
-// ... 其他 import 保持不變
+package com.example.settingapp
 
-override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    setContentView(R.layout.activity_mapping)
+import android.os.Bundle
+import android.widget.Button
+import androidx.appcompat.app.AppCompatActivity
 
-    // 綁定元件代碼... (略)
+class MappingActivity : AppCompatActivity() {
+    private val tcpManager = RobotTcpManager()
 
-    // 使用符合 AMR 協議的 JSON 指令
-    btnUp.setOnClickListener    { tcpManager.sendCommand("ManualControl", "F") } // 前進
-    btnDown.setOnClickListener  { tcpManager.sendCommand("ManualControl", "B") } // 後退
-    btnLeft.setOnClickListener  { tcpManager.sendCommand("ManualControl", "L") } // 左轉
-    btnRight.setOnClickListener { tcpManager.sendCommand("ManualControl", "R") } // 右轉
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_mapping)
 
-    // 停止按鈕 (建議增加一個停止鈕，或在放開按鈕時傳送 S)
-    // btnStop.setOnClickListener { tcpManager.sendCommand("ManualControl", "S") }
+        // 接收從 MainActivity 傳來的 IP 資訊
+        val ip = intent.getStringExtra("IP") ?: ""
+        // 在這個畫面重新建立連線，以便傳送控制指令
+        tcpManager.connect(ip) { }
 
-    // 儲存地圖：根據文件應使用 SetMap 指令
-    btnSave.setOnClickListener {
-        tcpManager.sendCommand("SetMap", "save")
-        Toast.makeText(this, "發送儲存指令", Toast.LENGTH_SHORT).show()
+        // 前進按鈕：對應 ManualControl 指令與參數 F (Forward)
+        findViewById<Button>(R.id.btn_up).setOnClickListener {
+            tcpManager.sendCommand("ManualControl", "F")
+        }
+
+        // 後退按鈕：對應 ManualControl 指令與參數 B (Backward)
+        findViewById<Button>(R.id.btn_down).setOnClickListener {
+            tcpManager.sendCommand("ManualControl", "B")
+        }
+
+        // 左轉按鈕：對應 ManualControl 指令與參數 L (Left)
+        findViewById<Button>(R.id.btn_left).setOnClickListener {
+            tcpManager.sendCommand("ManualControl", "L")
+        }
+
+        // 右轉按鈕：對應 ManualControl 指令與參數 R (Right)
+        findViewById<Button>(R.id.btn_right).setOnClickListener {
+            tcpManager.sendCommand("ManualControl", "R")
+        }
+
+        // 儲存按鈕：使用 SetMap 指令觸發機器人儲存當前掃描的地圖
+        findViewById<Button>(R.id.btn_save_map).setOnClickListener {
+            tcpManager.sendCommand("SetMap", "save")
+        }
     }
 
-    // 重新建圖：切換到 mapping 模式
-    btnRebuild.setOnClickListener {
-        tcpManager.sendCommand("SwitchMode", "mapping")
+    // 當離開這個畫面或 App 被縮小時執行
+    override fun onDestroy() {
+        super.onDestroy()
+        // 發送 "S" (Stop) 指令，防止機器人在 App 關閉後還在亂跑
+        tcpManager.sendCommand("ManualControl", "S")
+        tcpManager.close()
     }
 }
