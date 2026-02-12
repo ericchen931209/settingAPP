@@ -17,15 +17,8 @@
         android:id="@+id/et_ip"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="機器人 IP (例如 192.168.1.10)"
+        android:hint="機器人 IP (預設: 192.168.168.168)"
         android:inputType="text" />
-
-    <EditText
-        android:id="@+id/et_port"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Port (預設 8080)"
-        android:inputType="number" />
 
     <Button
         android:id="@+id/btn_connect"
@@ -41,5 +34,4 @@
         android:text="狀態: 未連線"
         android:layout_marginTop="20dp"
         android:textColor="#FF0000"/>
-
 </LinearLayout>
