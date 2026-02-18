@@ -2,7 +2,9 @@ package com.example.settingapp
 
 import android.os.Bundle
 import android.widget.Button
+import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
+import java.util.*
 
 class MappingActivity : AppCompatActivity() {
     private val tcpManager = RobotTcpManager()
@@ -11,42 +13,40 @@ class MappingActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_mapping)
 
-        // 接收從 MainActivity 傳來的 IP 資訊
-        val ip = intent.getStringExtra("IP") ?: ""
-        // 在這個畫面重新建立連線，以便傳送控制指令
-        tcpManager.connect(ip) { }
+        val robotIp = intent.getStringExtra("IP") ?: "192.168.168.168"
+        val imageView = findViewById<ImageView>(R.id.map_view)
 
-        // 前進按鈕：對應 ManualControl 指令與參數 F (Forward)
-        findViewById<Button>(R.id.btn_up).setOnClickListener {
-            tcpManager.sendCommand("ManualControl", "F")
+        // 1. 連線並設定地圖更新回調
+        tcpManager.connect(robotIp) { }
+        tcpManager.onMapReceived = { bitmap ->
+            runOnUiThread {
+                // 將收到的 Bitmap 顯示在全螢幕 ImageView 上
+                imageView.setImageBitmap(bitmap)
+            }
         }
 
-        // 後退按鈕：對應 ManualControl 指令與參數 B (Backward)
-        findViewById<Button>(R.id.btn_down).setOnClickListener {
-            tcpManager.sendCommand("ManualControl", "B")
-        }
+        // 2. 定期請求地圖 (依據 5.56 節 GetMapData)
+        Timer().schedule(object : TimerTask() {
+            override fun run() {
+                // 傳入空字串代表請求當前正在建圖的暫存圖
+                tcpManager.sendCommand("GetMapData", "")
+            }
+        }, 0, 2000) // 每 2 秒更新一次地圖
 
-        // 左轉按鈕：對應 ManualControl 指令與參數 L (Left)
-        findViewById<Button>(R.id.btn_left).setOnClickListener {
-            tcpManager.sendCommand("ManualControl", "L")
-        }
+        // 3. 遙控按鈕 (依據 5.9 節 ManualControl)
+        findViewById<Button>(R.id.btn_up).setOnClickListener { tcpManager.sendCommand("ManualControl", "F") }
+        findViewById<Button>(R.id.btn_down).setOnClickListener { tcpManager.sendCommand("ManualControl", "B") }
+        findViewById<Button>(R.id.btn_left).setOnClickListener { tcpManager.sendCommand("ManualControl", "L") }
+        findViewById<Button>(R.id.btn_right).setOnClickListener { tcpManager.sendCommand("ManualControl", "R") }
 
-        // 右轉按鈕：對應 ManualControl 指令與參數 R (Right)
-        findViewById<Button>(R.id.btn_right).setOnClickListener {
-            tcpManager.sendCommand("ManualControl", "R")
-        }
-
-        // 儲存按鈕：使用 SetMap 指令觸發機器人儲存當前掃描的地圖
-        findViewById<Button>(R.id.btn_save_map).setOnClickListener {
-            tcpManager.sendCommand("SetMap", "save")
-        }
+        // 4. 儲存與重新建圖
+        findViewById<Button>(R.id.btn_save_map).setOnClickListener { tcpManager.sendCommand("SetMap", "save") }
+        findViewById<Button>(R.id.btn_rebuild).setOnClickListener { tcpManager.sendCommand("SwitchMode", "mapping") }
     }
 
-    // 當離開這個畫面或 App 被縮小時執行
     override fun onDestroy() {
         super.onDestroy()
-        // 發送 "S" (Stop) 指令，防止機器人在 App 關閉後還在亂跑
-        tcpManager.sendCommand("ManualControl", "S")
+        tcpManager.sendCommand("ManualControl", "S") // 安全停止
         tcpManager.close()
     }
 }
