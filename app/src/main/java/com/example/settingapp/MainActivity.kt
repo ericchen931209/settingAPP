@@ -1,53 +1,98 @@
 package com.example.settingapp
 
+import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
-import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
+import android.util.Log
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
+import com.example.settingapp.databinding.ActivityMainBinding
+import java.net.*
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
-    private val tcpManager = RobotTcpManager() // 初始化通訊工具
+
+    private lateinit var binding: ActivityMainBinding
+    private val AMR_IP = "192.168.168.168"
+    private val CMD_PORT = 8900
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        // 綁定 XML 中的 UI 元件，以便在程式中操作
-        val btnConnect = findViewById<Button>(R.id.btn_connect)
-        val etIp = findViewById<EditText>(R.id.et_ip)
-        val tvStatus = findViewById<TextView>(R.id.tv_status)
+        binding.etIp.visibility = View.GONE
+        binding.btnConnect.text = "直接連線至 AMR"
 
-        // 設定「連接機器人」按鈕的點擊行為
-        btnConnect.setOnClickListener {
-            val ip = etIp.text.toString()
-            // 呼叫連線邏輯
-            tcpManager.connect(ip) { status ->
-                // 更新畫面文字必須切換回 runOnUiThread (主執行緒)
-                runOnUiThread {
-                    tvStatus.text = "狀態: $status"
-                    // 若關鍵字顯示成功，則跳出詢問對話框
-                    if (status.contains("成功")) showMapCheckDialog(ip)
-                }
-            }
+        binding.btnConnect.setOnClickListener {
+            startAmrConnection()
         }
     }
 
-    // 彈出對話框：詢問地圖狀態以進行功能分流
-    private fun showMapCheckDialog(ip: String) {
-        AlertDialog.Builder(this)
-            .setTitle("IRIS 連線成功")
-            .setMessage("您是否已有地圖檔案？")
-            .setPositiveButton("有，匯入地圖") { _, _ -> /* 預留匯入功能 */ }
-            .setNegativeButton("沒有，去建圖") { _, _ ->
-                // 使用 Intent 進行頁面跳轉，並將 IP 傳給下一個畫面
-                val intent = Intent(this, MappingActivity::class.java)
-                intent.putExtra("IP", ip)
-                startActivity(intent)
+    private fun startAmrConnection() {
+        binding.btnConnect.isEnabled = false
+        binding.tvStatus.text = "連線中 (強制使用乙太網路)..."
+        binding.tvStatus.setTextColor(Color.parseColor("#FFA500"))
+
+        thread {
+            try {
+                // 【關鍵技術】：在不關閉 Wi-Fi 的情況下，強制尋找乙太網路介面
+                val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val allNetworks = connectivityManager.allNetworks
+                var ethernetNetwork: android.net.Network? = null
+
+                for (network in allNetworks) {
+                    val caps = connectivityManager.getNetworkCapabilities(network)
+                    if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true) {
+                        ethernetNetwork = network
+                        break
+                    }
+                }
+
+                val socket = Socket()
+
+                if (ethernetNetwork != null) {
+                    Log.d("AMR_TCP", "偵測到乙太網路，執行硬體綁定連線")
+                    // 強制將此 Socket 綁定到乙太網路硬體
+                    ethernetNetwork.bindSocket(socket)
+                } else {
+                    Log.w("AMR_TCP", "未偵測到乙太網路，使用預設路由 (可能因 Wi-Fi 干擾導致逾時)")
+                }
+
+                // 執行連線
+                Log.d("AMR_TCP", "嘗試連接 $AMR_IP:$CMD_PORT...")
+                socket.connect(InetSocketAddress(AMR_IP, CMD_PORT), 5000)
+
+                Log.d("AMR_TCP", "TCP 連線成功")
+
+                runOnUiThread {
+                    binding.tvStatus.text = "連線成功"
+                    binding.tvStatus.setTextColor(Color.GREEN)
+
+                    binding.root.postDelayed({
+                        val intent = Intent(this, MappingActivity::class.java)
+                        startActivity(intent)
+                        binding.btnConnect.isEnabled = true
+                    }, 1000)
+                }
+                socket.close()
+
+            } catch (e: Exception) {
+                val errorReason = when (e) {
+                    is SocketTimeoutException -> "連線失敗: 5 秒逾時 (請檢查線路)"
+                    is ConnectException -> "連線失敗: 機器人拒絕 (Port 未開)"
+                    else -> "連線錯誤: ${e.localizedMessage}"
+                }
+                Log.e("AMR_TCP", errorReason)
+                runOnUiThread {
+                    binding.tvStatus.text = errorReason
+                    binding.tvStatus.setTextColor(Color.RED)
+                    binding.btnConnect.isEnabled = true
+                }
             }
-            .setCancelable(false) // 防止點擊背景關閉對話框
-            .show()
+        }
     }
 }

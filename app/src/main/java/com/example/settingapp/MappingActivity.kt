@@ -15,19 +15,17 @@ class MappingActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_mapping)
 
-        val ip = intent.getStringExtra("IP") ?: ""
-        val mapView = findViewById<ImageView>(R.id.map_view)
+        val ip = intent.getStringExtra("IP") ?: "192.168.168.168"
         val tvConn = findViewById<TextView>(R.id.tv_status_conn)
         val tvBatt = findViewById<TextView>(R.id.tv_status_battery)
         val tvMode = findViewById<TextView>(R.id.tv_status_mode)
+        val mapView = findViewById<ImageView>(R.id.map_view)
 
-        // 1. 設定回調：更新狀態欄與地圖
         tcpManager.onStatusUpdate = { status, battery, mode ->
             runOnUiThread {
                 tvConn.text = status
                 tvConn.setTextColor(if (status.contains("已連線")) Color.GREEN else Color.RED)
                 tvBatt.text = "電量: $battery%"
-                tvBatt.setTextColor(if (battery < 20) Color.RED else Color.WHITE)
                 tvMode.text = "模式: $mode"
             }
         }
@@ -36,25 +34,26 @@ class MappingActivity : AppCompatActivity() {
             runOnUiThread { mapView.setImageBitmap(bitmap) }
         }
 
-        // 2. 定時請求：依照 5.56 節請求地圖
-        tcpManager.connect(ip) { }
+        tcpManager.connect(ip) { status ->
+            runOnUiThread { tvConn.text = status }
+        }
+
+        // 依據 PDF 規範，每 2 秒請求一次地圖
         Timer().schedule(object : TimerTask() {
-            override fun run() { tcpManager.sendCommand("GetMapData", "") }
+            override fun run() {
+                tcpManager.sendCommand("GetMapData", "")
+            }
         }, 0, 2000)
 
-        // 3. 方向控制 (5.9 節)
+        // 遙控按鈕
         findViewById<Button>(R.id.btn_up).setOnClickListener { tcpManager.sendCommand("ManualControl", "F") }
         findViewById<Button>(R.id.btn_down).setOnClickListener { tcpManager.sendCommand("ManualControl", "B") }
         findViewById<Button>(R.id.btn_left).setOnClickListener { tcpManager.sendCommand("ManualControl", "L") }
         findViewById<Button>(R.id.btn_right).setOnClickListener { tcpManager.sendCommand("ManualControl", "R") }
-
-        // 4. 開啟建圖 (這會啟動 Lidar)
-        findViewById<Button>(R.id.btn_rebuild).setOnClickListener { tcpManager.sendCommand("SwitchMode", "mapping") }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        tcpManager.sendCommand("ManualControl", "S") // 安全停止
         tcpManager.close()
     }
 }
