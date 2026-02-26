@@ -1,19 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:background="#333333"
+    android:layout_height="40dp"
+    android:background="#2C2C2C"
+    android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:padding="8dp">
+    android:paddingStart="15dp"
+    android:paddingEnd="15dp">
 
     <TextView
-        android:id="@+id/tv_status_connection"
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:id="@+id/tv_status_conn"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="連線: 未連線"
-        android:textColor="#FF0000"
-        android:textSize="14sp" />
+        android:text="● 未連線"
+        android:textColor="#FF5252"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/tv_status_mode"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="模式: 待機"
+        android:textColor="#BBBBBB"
+        android:textSize="12sp" />
 
     <TextView
         android:id="@+id/tv_status_battery"
@@ -21,5 +32,5 @@
         android:layout_height="wrap_content"
         android:text="電量: --%"
         android:textColor="#FFFFFF"
-        android:textSize="14sp" />
+        android:textSize="12sp" />
 </LinearLayout>
