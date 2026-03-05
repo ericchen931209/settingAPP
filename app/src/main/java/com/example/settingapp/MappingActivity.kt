@@ -1,58 +1,56 @@
 package com.example.settingapp
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Color
-import android.graphics.drawable.BitmapDrawable
+import android.graphics.*
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
-import android.util.Base64
 import android.util.Log
+import android.widget.ImageView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.example.settingapp.databinding.ActivityMappingBinding
 import org.json.JSONObject
 import java.io.*
 import java.net.*
+import java.nio.ByteBuffer
 import kotlin.concurrent.thread
 
 class MappingActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMappingBinding
     private var cmdWriter: PrintWriter? = null
     private var isRunning = true
     private val AMR_IP = "192.168.168.168"
 
+    // 地圖參數 (根據你的 Log: -17688, -9259)
+    private var currentMapW = 332
+    private var currentMapH = 332
+    private var mapX = -17688f
+    private var mapY = -9259f
+    private val mapDataBuffer = ByteArrayOutputStream()
+
+    // 儲存雷達紅點座標
+    private var laserPoints = mutableListOf<PointF>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMappingBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        setContentView(R.layout.activity_mapping)
 
-        startStatusListener()     // 8901 接收機器人回傳
-        connectToCommandPort()   // 8900 發送 APP 指令
+        // 滿版配置
+        findViewById<ImageView>(R.id.map_view)?.scaleType = ImageView.ScaleType.FIT_CENTER
+
+        startStatusListener()
+        connectToCommandPort()
         setupControlButtons()
     }
 
-    // 更新狀態列與電量百分比 (0~20 轉 %)
-    private fun updateStatusBar(isConnected: Boolean, battery: Int = -1) {
+    private fun updateUI(status: String? = null, battery: Int = -1, remain: String? = null) {
         runOnUiThread {
-            val statusView = findViewById<TextView>(R.id.tv_status_conn)
-            val batteryView = findViewById<TextView>(R.id.tv_status_battery)
-
-            if (isConnected) {
-                statusView?.text = "● 已連線"
-                statusView?.setTextColor(Color.parseColor("#4CAF50"))
-            } else {
-                statusView?.text = "● 未連線"
-                statusView?.setTextColor(Color.parseColor("#FF5252"))
+            if (status != null) findViewById<TextView>(R.id.tv_status_conn)?.apply {
+                text = status
+                setTextColor(if (status.contains("已連線")) Color.GREEN else Color.RED)
             }
-
-            if (battery != -1) {
-                val batteryPercent = (battery * 100) / 20
-                batteryView?.text = "電量: $batteryPercent%"
-            }
+            if (battery != -1) findViewById<TextView>(R.id.tv_status_battery)?.text = "電量: ${(battery * 100) / 20}%"
+            // 修正 5.4 節：顯示剩餘張數
+            if (remain != null) findViewById<TextView>(R.id.tv_status_mode)?.text = "剩餘: $remain 張"
         }
     }
 
@@ -66,53 +64,116 @@ class MappingActivity : AppCompatActivity() {
                     thread {
                         try {
                             val ins = client.getInputStream()
-                            val outputStream = ByteArrayOutputStream()
-                            val buffer = ByteArray(65536)
-                            var len: Int
-                            while (ins.read(buffer).also { len = it } != -1) {
-                                outputStream.write(buffer, 0, len)
-                                val currentData = outputStream.toString("UTF-8").trim()
-                                if (currentData.endsWith("}")) {
-                                    handleRobotResponse(currentData)
-                                    outputStream.reset()
+                            val buffer = ByteArray(1024 * 64)
+                            var bytesRead: Int
+
+                            while (ins.read(buffer).also { bytesRead = it } != -1) {
+                                val rawStr = String(buffer, 0, bytesRead, Charsets.UTF_8)
+
+                                // 1. 解析 JSON (電量、5.4 剩餘空間、5.58 雷達數據)
+                                if (rawStr.contains("{") && rawStr.contains("}")) {
+                                    handleRobotJson(rawStr)
+                                }
+
+                                // 2. 累積地圖 Binary (5.56)
+                                if (bytesRead > 1000 || !rawStr.trim().startsWith("{")) {
+                                    mapDataBuffer.write(buffer, 0, bytesRead)
+                                    renderFullMap()
                                 }
                             }
                         } catch (e: Exception) {
-                            Log.e("AMR_TCP", "8901 斷開")
+                            Log.e("AMR_TCP", "8901 Stream Error")
                         } finally {
                             client.close()
                         }
                     }
                 }
             } catch (e: Exception) {
-                Log.e("AMR_TCP", "8901 啟動失敗")
-            } finally {
                 server?.close()
             }
         }
     }
 
-    private fun handleRobotResponse(jsonStr: String) {
-        if (jsonStr.contains("AO_CHECK_HOST_HEARTBEAT")) {
-            runOnUiThread { updateStatusBar(true) }
-            return
-        }
+    private fun handleRobotJson(jsonStr: String) {
         try {
-            val json = JSONObject(jsonStr)
-            if (json.has("battery_level")) {
-                updateStatusBar(true, json.getInt("battery_level"))
+            val start = jsonStr.indexOf("{")
+            val end = jsonStr.lastIndexOf("}")
+            val json = JSONObject(jsonStr.substring(start, end + 1))
+
+            updateUI(status = "● 已連線")
+
+            if (json.has("battery_level")) updateUI(battery = json.getInt("battery_level"))
+
+            // 5.4 節：處理 SetMap 與 remaining 數值
+            if (json.optString("Command") == "SetMap") {
+                val res = json.optString("Result", "")
+                if (res.any { it.isDigit() }) updateUI(remain = res)
             }
-            // 5.56 節：接收機器人傳來的地圖數據
-            if (json.has("Data")) {
-                var base64 = json.optString("Data")
-                if (base64.contains(",")) base64 = base64.substring(base64.indexOf(",") + 1)
-                thread {
-                    val bytes = Base64.decode(base64, Base64.DEFAULT)
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    runOnUiThread { binding.mapView.setImageBitmap(bitmap) }
+
+            // 5.58 節核心：解析雷達紅點數據 (Result 裡通常是 x,y;x,y...)
+            if (json.optString("Command") == "GetLidarScan") {
+                val rawPoints = json.optString("Result", "")
+                if (rawPoints.isNotEmpty() && rawPoints != "Successful") {
+                    parseLidarPoints(rawPoints)
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) {}
+    }
+
+    private fun parseLidarPoints(raw: String) {
+        try {
+            val points = mutableListOf<PointF>()
+            // 假設格式為 x,y;x,y 或從 JSON Array 解析
+            val pairs = raw.split(";")
+            for (pair in pairs) {
+                val xy = pair.split(",")
+                if (xy.size == 2) {
+                    points.add(PointF(xy[0].toFloat(), xy[1].toFloat()))
+                }
+            }
+            laserPoints = points
+        } catch (e: Exception) {}
+    }
+
+    private fun renderFullMap() {
+        val expectedSize = currentMapW * currentMapH
+        if (mapDataBuffer.size() >= expectedSize) {
+            try {
+                val rawData = mapDataBuffer.toByteArray()
+                val bitmap = Bitmap.createBitmap(currentMapW, currentMapH, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                val paint = Paint()
+
+                // 畫地圖底圖 (5.56)
+                for (i in 0 until expectedSize) {
+                    val value = rawData[i].toInt() and 0xFF
+                    val x = i % currentMapW
+                    val y = i / currentMapW
+                    paint.color = when {
+                        value > 200 -> Color.WHITE
+                        value == 0 -> Color.parseColor("#CCCCCC") // 未知區域灰
+                        else -> Color.BLACK
+                    }
+                    canvas.drawPoint(x.toFloat(), y.toFloat(), paint)
+                }
+
+                // 疊加 5.58 雷達紅點
+                paint.color = Color.RED
+                paint.strokeWidth = 3f
+                for (pt in laserPoints) {
+                    val drawX = (pt.x - mapX) / 100f
+                    val drawY = (pt.y - mapY) / 100f
+                    canvas.drawPoint(drawX, drawY, paint)
+                }
+
+                runOnUiThread {
+                    findViewById<ImageView>(R.id.map_view)?.setImageBitmap(bitmap)
+                }
+                mapDataBuffer.reset()
+            } catch (e: Exception) {
+                mapDataBuffer.reset()
+            }
+        }
     }
 
     private fun connectToCommandPort() {
@@ -121,54 +182,36 @@ class MappingActivity : AppCompatActivity() {
                 val socket = Socket()
                 val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
                 cm.allNetworks.find { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true }?.bindSocket(socket)
-
                 socket.connect(InetSocketAddress(AMR_IP, 8900), 5000)
                 cmdWriter = PrintWriter(BufferedWriter(OutputStreamWriter(socket.getOutputStream(), "UTF-8")), true)
 
-                // 註冊電量通知
-                cmdWriter?.println("{\"Command\":\"RegNotify\",\"Type\":\"GetBatteryLevel\",\"Period\":2000}")
+                // --- 5.1 & 5.58 節：主動訂閱雷達數據 ---
+                cmdWriter?.println("{\"Command\":\"RegNotify\",\"Type\":\"GetLidarScan\",\"Period\":500}")
+
+                // 5.4 節：查詢剩餘張數
+                cmdWriter?.println("{\"Command\":\"SetMap\",\"Para\":\"remaining\"}")
 
                 while (isRunning) {
-                    // 主動請求地圖 (5.56 節)
+                    // 5.56 節：要地圖
                     cmdWriter?.println("{\"Command\":\"GetMapData\",\"Para\":\"\"}")
-                    Thread.sleep(3000)
+                    Thread.sleep(1000)
                 }
             } catch (e: Exception) {
-                runOnUiThread { updateStatusBar(false) }
+                updateUI(status = "● 連線失敗")
             }
         }
     }
 
     private fun setupControlButtons() {
-        binding.btnUp.setOnClickListener { sendMove("F") }
-        binding.btnDown.setOnClickListener { sendMove("B") }
-        binding.btnLeft.setOnClickListener { sendMove("L") }
-        binding.btnRight.setOnClickListener { sendMove("R") }
-
-        // --- 核心：5.54 節 SetGraffitiedMap (APP 發指令給機器人) ---
-        // 這裡將「重新建圖」按鈕改為「同步繪製地圖」功能
-        binding.btnRebuild.setOnClickListener {
-            val bitmap = (binding.mapView.drawable as? BitmapDrawable)?.bitmap
-            if (bitmap != null) {
-                thread {
-                    try {
-                        val bos = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, bos)
-                        val base64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)
-
-                        // 依照 5.54 節格式：Para 必須手動加上標籤前綴
-                        val json = JSONObject().apply {
-                            put("Command", "SetGraffitiedMap")
-                            put("Para", "data:image/png;base64,$base64")
-                        }
-
-                        cmdWriter?.println(json.toString())
-                        Log.d("AMR_TCP", ">>> APP 已發送指令: SetGraffitiedMap")
-                        runOnUiThread { Toast.makeText(this, "已發送繪製地圖指令", Toast.LENGTH_SHORT).show() }
-                    } catch (e: Exception) {
-                        Log.e("AMR_TCP", "發送失敗: ${e.message}")
-                    }
-                }
+        findViewById<android.view.View>(R.id.btn_up)?.setOnClickListener { sendMove("F") }
+        findViewById<android.view.View>(R.id.btn_down)?.setOnClickListener { sendMove("B") }
+        findViewById<android.view.View>(R.id.btn_left)?.setOnClickListener { sendMove("L") }
+        findViewById<android.view.View>(R.id.btn_right)?.setOnClickListener { sendMove("R") }
+        findViewById<android.view.View>(R.id.btn_rebuild)?.setOnClickListener {
+            thread {
+                // 重新觸發 5.4 與 5.58
+                cmdWriter?.println("{\"Command\":\"SetMap\",\"Para\":\"remaining\"}")
+                cmdWriter?.println("{\"Command\":\"RegNotify\",\"Type\":\"GetLidarScan\",\"Period\":500}")
             }
         }
     }
